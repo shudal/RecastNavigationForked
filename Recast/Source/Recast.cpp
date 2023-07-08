@@ -395,6 +395,7 @@ void rcMarkWalkableTriangles(rcContext* context, const float walkableSlopeAngle,
 		const int* tri = &tris[i * 3];
 		calcTriNormal(&verts[tri[0] * 3], &verts[tri[1] * 3], &verts[tri[2] * 3], norm);
 		// Check if the face is walkable.
+		// nomrl[1]是 三角面法向量 与 竖直向上的单位向量 点乘的结果，表示三角面中心与水平面的夹角的 cos值
 		if (norm[1] > walkableThr)
 		{
 			areaMod.apply(triAreaIDs[i]);
