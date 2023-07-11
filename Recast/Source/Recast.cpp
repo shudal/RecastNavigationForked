@@ -395,7 +395,7 @@ void rcMarkWalkableTriangles(rcContext* context, const float walkableSlopeAngle,
 		const int* tri = &tris[i * 3];
 		calcTriNormal(&verts[tri[0] * 3], &verts[tri[1] * 3], &verts[tri[2] * 3], norm);
 		// Check if the face is walkable.
-		// nomrl[1]æ˜¯ ä¸‰è§’é¢æ³•å‘é‡ ä¸Ž ç«–ç›´å‘ä¸Šçš„å•ä½å‘é‡ ç‚¹ä¹˜çš„ç»“æžœï¼Œè¡¨ç¤ºä¸‰è§’é¢ä¸­å¿ƒä¸Žæ°´å¹³é¢çš„å¤¹è§’çš„ coså€¼
+		// nomrl[1]ÊÇ Èý½ÇÃæ·¨ÏòÁ¿ Óë ÊúÖ±ÏòÉÏµÄµ¥Î»ÏòÁ¿ µã³ËµÄ½á¹û£¬±íÊ¾Èý½ÇÃæÖÐÐÄÓëË®Æ½ÃæµÄ¼Ð½ÇµÄ cosÖµ
 		if (norm[1] > walkableThr)
 		{
 			areaMod.apply(triAreaIDs[i]);

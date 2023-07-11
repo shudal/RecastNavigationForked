@@ -239,6 +239,8 @@ static void dividePoly(const float* inVerts, int inVertsCount,
 
 	int poly1Vert = 0;
 	int poly2Vert = 0;
+	// 第一次是 最后一个顶点到第一个顶点 这条边；接着遍历的就是 第一个顶点到第二个顶点 这条边
+	// 这个遍历是一个一个顶点开始考虑的；对于每个顶点，考虑是否要把这个顶点加入out verts
 	for (int inVertA = 0, inVertB = inVertsCount - 1; inVertA < inVertsCount; inVertB = inVertA, ++inVertA)
 	{
 		// If the two vertices are on the same side of the separating axis
@@ -246,11 +248,16 @@ static void dividePoly(const float* inVerts, int inVertsCount,
 
 		if (!sameSide)
 		{
+			// 切割比。边第二个顶点 与 总体边的比例
 			float s = inVertAxisDelta[inVertB] / (inVertAxisDelta[inVertB] - inVertAxisDelta[inVertA]);
+
+			// 切割点 的坐标
 			outVerts1[poly1Vert * 3 + 0] = inVerts[inVertB * 3 + 0] + (inVerts[inVertA * 3 + 0] - inVerts[inVertB * 3 + 0]) * s;
 			outVerts1[poly1Vert * 3 + 1] = inVerts[inVertB * 3 + 1] + (inVerts[inVertA * 3 + 1] - inVerts[inVertB * 3 + 1]) * s;
 			outVerts1[poly1Vert * 3 + 2] = inVerts[inVertB * 3 + 2] + (inVerts[inVertA * 3 + 2] - inVerts[inVertB * 3 + 2]) * s;
+			// 上面把切割点加到了verts1，下面把切割点加到verts2
 			rcVcopy(&outVerts2[poly2Vert * 3], &outVerts1[poly1Vert * 3]);
+			
 			poly1Vert++;
 			poly2Vert++;
 			
@@ -258,6 +265,7 @@ static void dividePoly(const float* inVerts, int inVertsCount,
 			// since these were already added above
 			if (inVertAxisDelta[inVertA] > 0)
 			{
+				// 当前考虑的点在 割线 的左边。这个左边，就是只 以割线从左到右为 正轴，这个点在这个轴的左边。
 				rcVcopy(&outVerts1[poly1Vert * 3], &inVerts[inVertA * 3]);
 				poly1Vert++;
 			}
@@ -269,11 +277,13 @@ static void dividePoly(const float* inVerts, int inVertsCount,
 		}
 		else
 		{
+			//边的两个点 在分割线的同一边
 			// add the inVertA point to the right polygon. Addition is done even for points on the dividing line
 			if (inVertAxisDelta[inVertA] >= 0)
 			{
 				rcVcopy(&outVerts1[poly1Vert * 3], &inVerts[inVertA * 3]);
 				poly1Vert++;
+				// 如果当前考虑的这个顶点，在分割线上，那么就会把这个顶点加入out verts2
 				if (inVertAxisDelta[inVertA] != 0)
 				{
 					continue;
@@ -331,6 +341,7 @@ static bool rasterizeTri(const float* v0, const float* v1, const float* v2,
 	const int h = hf.height;
 	const float by = hfBBMax[1] - hfBBMin[1];
 
+	// z0~z1 表示这个三角形的z轴范围
 	// Calculate the footprint of the triangle on the grid's z-axis
 	int z0 = (int)((triBBMin[2] - hfBBMin[2]) * inverseCellSize);
 	int z1 = (int)((triBBMax[2] - hfBBMin[2]) * inverseCellSize);
@@ -340,12 +351,14 @@ static bool rasterizeTri(const float* v0, const float* v1, const float* v2,
 	z1 = rcClamp(z1, 0, h - 1);
 
 	// Clip the triangle into all grid cells it touches.
+	// 为什么是每个数组 7*3=21个元素呢？ 这里具体是用7还是用啥，需要保证三角形被切后的顶点数<=这个数
 	float buf[7 * 3 * 4];
 	float* in = buf;
 	float* inRow = buf + 7 * 3;
 	float* p1 = inRow + 7 * 3;
 	float* p2 = p1 + 7 * 3;
 
+	// in数组存了三角形的三个点（每个点3个浮点数表示 三个轴的坐标）
 	rcVcopy(&in[0], v0);
 	rcVcopy(&in[1 * 3], v1);
 	rcVcopy(&in[2 * 3], v2);
@@ -356,13 +369,17 @@ static bool rasterizeTri(const float* v0, const float* v1, const float* v2,
 	{
 		// Clip polygon to row. Store the remaining polygon as well
 		const float cellZ = hfBBMin[2] + (float)z * cellSize;
+		// 最开始z=z0时，上面这个cellZ算出来是切割不到三角形的，因此 dividePoly 时 传入的是 cellZ + cellSize
 		dividePoly(in, nvIn, inRow, &nvRow, p1, &nvIn, cellZ + cellSize, RC_AXIS_Z);
+		// 切割后的另外一块 赋给in，下次遍历时处理
 		rcSwap(in, p1);
 		
 		if (nvRow < 3)
 		{
+			// 说明没切到
 			continue;
 		}
+		// 为啥还有这种情况
 		if (z < 0)
 		{
 			continue;
