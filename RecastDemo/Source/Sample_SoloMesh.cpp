@@ -452,7 +452,9 @@ bool Sample_SoloMesh::handleBuild()
 	// If your input data is multiple meshes, you can transform them here, calculate
 	// the are type for each of the meshes and rasterize them.
 	memset(m_triareas, 0, ntris*sizeof(unsigned char));
+	// 根据三角面的法向量判断 判断三角面是否可可行走。可行走的话 m_triareas 里做上标记，在体素化时用到
 	rcMarkWalkableTriangles(m_ctx, m_cfg.walkableSlopeAngle, verts, nverts, tris, ntris, m_triareas, SAMPLE_AREAMOD_GROUND);
+	// 体素化。所有的三角形转化为空间格子中的span（span的高度为多个单位cell）
 	if (!rcRasterizeTriangles(m_ctx, verts, nverts, tris, m_triareas, ntris, *m_solid, m_cfg.walkableClimb))
 	{
 		m_ctx->log(RC_LOG_ERROR, "buildNavigation: Could not rasterize triangles.");
@@ -473,11 +475,11 @@ bool Sample_SoloMesh::handleBuild()
 	// remove unwanted overhangs caused by the conservative rasterization
 	// as well as filter spans where the character cannot possibly stand.
 	if (m_filterLowHangingObstacles)
-		rcFilterLowHangingWalkableObstacles(m_ctx, m_cfg.walkableClimb, *m_solid);
+		rcFilterLowHangingWalkableObstacles(m_ctx, m_cfg.walkableClimb, *m_solid); // 不可走的标记为可走
 	if (m_filterLedgeSpans)
-		rcFilterLedgeSpans(m_ctx, m_cfg.walkableHeight, m_cfg.walkableClimb, *m_solid);
+		rcFilterLedgeSpans(m_ctx, m_cfg.walkableHeight, m_cfg.walkableClimb, *m_solid);// 可走变不可走
 	if (m_filterWalkableLowHeightSpans)
-		rcFilterWalkableLowHeightSpans(m_ctx, m_cfg.walkableHeight, *m_solid);
+		rcFilterWalkableLowHeightSpans(m_ctx, m_cfg.walkableHeight, *m_solid); // 同一格子内的 上下两个span距离太近；可走变不可走
 
 
 	//

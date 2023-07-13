@@ -358,6 +358,9 @@ static bool rasterizeTri(const float* v0, const float* v1, const float* v2,
 	int z1 = (int)((triBBMax[2] - hfBBMin[2]) * inverseCellSize);
 
 	// use -1 rather than 0 to cut the polygon properly at the start of the tile
+	//		z轴方向，如果三角形有比heightfield z轴最小值还小的部分，clamp到-1。
+	//		KorganPuzzle 为什么是从-1而不是直接从0开始割呢？
+	//			如果有-1的部分，后续会割掉-1的部分，不考虑这个
 	z0 = rcClamp(z0, -1, h - 1);
 	z1 = rcClamp(z1, 0, h - 1);
 
@@ -390,7 +393,7 @@ static bool rasterizeTri(const float* v0, const float* v1, const float* v2,
 			// 说明没切到
 			continue;
 		}
-		// 为啥还有这种情况
+		// 说明有-1的部分，前面割掉了-1的部分，continue调过不考虑这个
 		if (z < 0)
 		{
 			continue;

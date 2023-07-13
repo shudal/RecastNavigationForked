@@ -244,10 +244,14 @@ struct rcConfig
 	/// The maximum slope that is considered walkable. [Limits: 0 <= value < 90] [Units: Degrees] 
 	float walkableSlopeAngle;
 
+	// 过滤可行走的低高度区间 用到。同一个格子里 上下相邻的两个span，如果中间空出来的距离比这个小，那下面那个不可走
 	/// Minimum floor to 'ceiling' height that will still allow the floor area to 
 	/// be considered walkable. [Limit: >= 3] [Units: vx] 
 	int walkableHeight;
 	
+	// 体素化阶段 合并两个span时，在新span比老span高时，如果新span比老span的高度小于这个，那将综合考虑新老span的标志位，否则用新span的标志位。
+	// 筛选低垂的可行走障碍 时也会用到
+	// 单位是cell
 	/// Maximum ledge height that is considered to still be traversable. [Limit: >=0] [Units: vx] 
 	int walkableClimb;
 	
@@ -293,9 +297,14 @@ static const int RC_SPANS_PER_POOL = 2048;
 /// @see rcHeightfield
 struct rcSpan
 {
+	// 单位是cell
 	unsigned int smin : RC_SPAN_HEIGHT_BITS; ///< The lower limit of the span. [Limit: < #smax]
 	unsigned int smax : RC_SPAN_HEIGHT_BITS; ///< The upper limit of the span. [Limit: <= #RC_SPAN_MAX_HEIGHT]
+	// 这个注释里说的这个area id不是什么自增的id啥的，这个字段的值是标志位，有几个标志位
 	unsigned int area : 6;                   ///< The area id assigned to the span.
+
+	// 这个colume是 平行于y轴竖直向上 的柱体。
+	// 在一个heightfield的同一个column，有多个span，这些span通过next指针连接起来。next连起来的这些span，高度是从低到高的。
 	rcSpan* next;                            ///< The next span higher up in column.
 };
 
@@ -320,8 +329,9 @@ struct rcHeightfield
 	float bmax[3];		///< The maximum bounds in world space. [(x, y, z)]
 	float cs;			///< The size of each cell. (On the xz-plane.)
 	float ch;			///< The height of each cell. (The minimum increment along the y-axis.)
-	rcSpan** spans;		///< Heightfield of spans (width*height).
-	rcSpanPool* pools;	///< Linked list of span pools.
+	rcSpan** spans;		///< Heightfield of spans (width*height).存的是那个格子的 最低 的那个span
+	// rcSpawnPool里有 rcSpan数组。freelist是 所有pools的 rcspan元素 连起来形成的。
+	rcSpanPool* pools;	///< Linked list of span pools. 
 	rcSpan* freelist;	///< The next free span.
 
 private:
