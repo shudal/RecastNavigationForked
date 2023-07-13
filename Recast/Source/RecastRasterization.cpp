@@ -47,6 +47,8 @@ static rcSpan* allocSpan(rcHeightfield& hf)
 	// If necessary, allocate new page and update the freelist.
 	if (hf.freelist == NULL || hf.freelist->next == NULL)
 	{
+		// 先创建 spanPool,一个pool里有多个rcSpan，把新建的rcSpan们连到free list
+
 		// Create new page.
 		// Allocate memory for the new pool.
 		rcSpanPool* spanPool = (rcSpanPool*)rcAlloc(sizeof(rcSpanPool), RC_ALLOC_PERM);
@@ -102,7 +104,7 @@ static void freeSpan(rcHeightfield& hf, rcSpan* span)
 /// @param[in]	min					The new span's minimum cell index
 /// @param[in]	max					The new span's maximum cell index
 /// @param[in]	areaID				The new span's area type ID
-/// @param[in]	flagMergeThreshold	How close two spans maximum extents need to be to merge area type IDs
+/// @param[in]	flagMergeThreshold	How close two spans maximum extents need to be to merge area type IDs。单位是cell
 static bool addSpan(rcHeightfield& hf,
                     const int x, const int z,
                     const unsigned short min, const unsigned short max,
@@ -126,6 +128,7 @@ static bool addSpan(rcHeightfield& hf,
 	// Insert the new span, possibly merging it with existing spans.
 	while (currentSpan != NULL)
 	{
+		// 新的 在老的底下
 		if (currentSpan->smin > newSpan->smax)
 		{
 			// Current span is completely after the new span, break.
@@ -134,22 +137,28 @@ static bool addSpan(rcHeightfield& hf,
 		
 		if (currentSpan->smax < newSpan->smin)
 		{
+			// 老的在新的底下
 			// Current span is completely before the new span.  Keep going.
 			previousSpan = currentSpan;
 			currentSpan = currentSpan->next;
 		}
 		else
 		{
+			//newSpan 经过一波操作后将代表合并后的span
 			// The new span overlaps with an existing span.  Merge them.
 			if (currentSpan->smin < newSpan->smin)
 			{
+				// newspan的底 拉低到 当前span
 				newSpan->smin = currentSpan->smin;
 			}
 			if (currentSpan->smax > newSpan->smax)
 			{
+				// newspan的顶 拉高到 当前span
 				newSpan->smax = currentSpan->smax;
 			}
+			// 上面两波拉伸后，newSpan的的范围比currentSpan大了。相当于currentSpan被弄到了newSpan里
 			
+			// 结果就是，如果 新span顶 比 当前的顶 大不少，则合并的flag会采用 新span 的；否则会考虑新老的flag看哪个大用哪个
 			// Merge flags.
 			if (rcAbs((int)newSpan->smax - (int)currentSpan->smax) <= flagMergeThreshold)
 			{
@@ -157,6 +166,7 @@ static bool addSpan(rcHeightfield& hf,
 				newSpan->area = rcMax(newSpan->area, currentSpan->area);
 			}
 			
+			// 移除当前span。插入新span在后面的代码
 			// Remove the current span since it's now merged with newSpan.
 			// Keep going because there might be other overlapping spans that also need to be merged.
 			rcSpan* next = currentSpan->next;
@@ -173,6 +183,7 @@ static bool addSpan(rcHeightfield& hf,
 		}
 	}
 	
+	// 插入新span
 	// Insert new span after prev
 	if (previousSpan != NULL)
 	{
@@ -351,7 +362,7 @@ static bool rasterizeTri(const float* v0, const float* v1, const float* v2,
 	z1 = rcClamp(z1, 0, h - 1);
 
 	// Clip the triangle into all grid cells it touches.
-	// 为什么是每个数组 7*3=21个元素呢？ 这里具体是用7还是用啥，需要保证三角形被切后的顶点数<=这个数
+	// 为什么是每个数组 7*3=21个元素呢？ 因为一个三角形被切割两次，最多有7个顶点。
 	float buf[7 * 3 * 4];
 	float* in = buf;
 	float* inRow = buf + 7 * 3;
@@ -401,6 +412,7 @@ static bool rasterizeTri(const float* v0, const float* v1, const float* v2,
 		}
 		int x0 = (int)((minX - hfBBMin[0]) * inverseCellSize);
 		int x1 = (int)((maxX - hfBBMin[0]) * inverseCellSize);
+		// 这次要处理的这个多边形 的x轴范围 不在这个height field内
 		if (x1 < 0 || x0 >= w)
 		{
 			continue;
@@ -413,6 +425,7 @@ static bool rasterizeTri(const float* v0, const float* v1, const float* v2,
 
 		for (int x = x0; x <= x1; ++x)
 		{
+			// colum就是平行于z轴
 			// Clip polygon to column. store the remaining polygon as well
 			const float cx = hfBBMin[0] + (float)x * cellSize;
 			dividePoly(inRow, nv2, p1, &nv, p2, &nv2, cx + cellSize, RC_AXIS_X);
@@ -462,6 +475,8 @@ static bool rasterizeTri(const float* v0, const float* v1, const float* v2,
 			unsigned short spanMinCellIndex = (unsigned short)rcClamp((int)floorf(spanMin * inverseCellHeight), 0, RC_SPAN_MAX_HEIGHT);
 			unsigned short spanMaxCellIndex = (unsigned short)rcClamp((int)ceilf(spanMax * inverseCellHeight), (int)spanMinCellIndex + 1, RC_SPAN_MAX_HEIGHT);
 
+			// areaID 是返回值
+			// 内存不足（新建span)时 函数才会返回false
 			if (!addSpan(hf, x, z, spanMinCellIndex, spanMaxCellIndex, areaID, flagMergeThreshold))
 			{
 				return false;
@@ -509,6 +524,7 @@ bool rcRasterizeTriangles(rcContext* context,
 		const float* v0 = &verts[tris[triIndex * 3 + 0] * 3];
 		const float* v1 = &verts[tris[triIndex * 3 + 1] * 3];
 		const float* v2 = &verts[tris[triIndex * 3 + 2] * 3];
+		// 内存不足（新建span)时 函数才会返回false
 		if (!rasterizeTri(v0, v1, v2, triAreaIDs[triIndex], heightfield, heightfield.bmin, heightfield.bmax, heightfield.cs, inverseCellSize, inverseCellHeight, flagMergeThreshold))
 		{
 			context->log(RC_LOG_ERROR, "rcRasterizeTriangles: Out of memory.");
