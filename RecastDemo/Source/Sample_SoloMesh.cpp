@@ -495,6 +495,7 @@ bool Sample_SoloMesh::handleBuild()
 		m_ctx->log(RC_LOG_ERROR, "buildNavigation: Out of memory 'chf'.");
 		return false;
 	}
+	// 构建出open span们，并设置邻居的连通性
 	if (!rcBuildCompactHeightfield(m_ctx, m_cfg.walkableHeight, m_cfg.walkableClimb, *m_solid, *m_chf))
 	{
 		m_ctx->log(RC_LOG_ERROR, "buildNavigation: Could not build compact data.");
@@ -514,6 +515,8 @@ bool Sample_SoloMesh::handleBuild()
 		return false;
 	}
 
+	// 若一个open span的 高度区间 被 convexVolumn包括，并且span的水平中点 在这个convexVolumn内，则标记这个span属于conveVolumn 
+	//	 上面的那些函数，会修改span的标志位，比如把span设为不可走。这里的 rcMarkConvexPolyArea 会覆盖上面的结果。
 	// (Optional) Mark areas.
 	const ConvexVolume* vols = m_geom->getConvexVolumes();
 	for (int i  = 0; i < m_geom->getConvexVolumeCount(); ++i)

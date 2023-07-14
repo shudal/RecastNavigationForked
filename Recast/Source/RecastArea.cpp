@@ -81,6 +81,7 @@ bool rcErodeWalkableArea(rcContext* ctx, int radius, rcCompactHeightfield& chf)
 							}
 						}
 					}
+					// 只要有一个方向的邻居和自己不是连通的，就设为0。否则为255。0表示当前open span距离障碍距离为0个单位cell
 					// At least one missing neighbour.
 					if (nc != 4)
 						dist[i] = 0;
@@ -91,6 +92,8 @@ bool rcErodeWalkableArea(rcContext* ctx, int radius, rcCompactHeightfield& chf)
 	
 	unsigned char nd;
 	
+	// 相邻open span之间的距离认为是2cell,与 斜着的邻居的距离认为是3cell
+	// 从左下角往右上角比遍历。对于每个open span,依次与 左、左下、下、右下 的连通span比较。逆时针的。
 	// Pass 1
 	for (int y = 0; y < h; ++y)
 	{
@@ -100,18 +103,22 @@ bool rcErodeWalkableArea(rcContext* ctx, int radius, rcCompactHeightfield& chf)
 			for (int i = (int)c.index, ni = (int)(c.index+c.count); i < ni; ++i)
 			{
 				const rcCompactSpan& s = chf.spans[i];
-				
+
+				// direction 0->4 左、上、右、下
 				if (rcGetCon(s, 0) != RC_NOT_CONNECTED)
 				{
+					// 左
 					// (-1,0)
 					const int ax = x + rcGetDirOffsetX(0);
 					const int ay = y + rcGetDirOffsetY(0);
 					const int ai = (int)chf.cells[ax+ay*w].index + rcGetCon(s, 0);
 					const rcCompactSpan& as = chf.spans[ai];
+					// 限制nd值范围<=255
 					nd = (unsigned char)rcMin((int)dist[ai]+2, 255);
 					if (nd < dist[i])
 						dist[i] = nd;
 					
+					// 左下。下面的3是第四个：下
 					// (-1,-1)
 					if (rcGetCon(as, 3) != RC_NOT_CONNECTED)
 					{
@@ -125,6 +132,7 @@ bool rcErodeWalkableArea(rcContext* ctx, int radius, rcCompactHeightfield& chf)
 				}
 				if (rcGetCon(s, 3) != RC_NOT_CONNECTED)
 				{
+					// 下
 					// (0,-1)
 					const int ax = x + rcGetDirOffsetX(3);
 					const int ay = y + rcGetDirOffsetY(3);
@@ -134,6 +142,7 @@ bool rcErodeWalkableArea(rcContext* ctx, int radius, rcCompactHeightfield& chf)
 					if (nd < dist[i])
 						dist[i] = nd;
 					
+					// 右下
 					// (1,-1)
 					if (rcGetCon(as, 2) != RC_NOT_CONNECTED)
 					{
@@ -148,7 +157,9 @@ bool rcErodeWalkableArea(rcContext* ctx, int radius, rcCompactHeightfield& chf)
 			}
 		}
 	}
-	
+
+	// 从右上角往左下角遍历。对于每个span，依次与 右、右上、上、左上 的open span比较
+	// direction 0->4 左、上、右、下
 	// Pass 2
 	for (int y = h-1; y >= 0; --y)
 	{
@@ -158,6 +169,7 @@ bool rcErodeWalkableArea(rcContext* ctx, int radius, rcCompactHeightfield& chf)
 			for (int i = (int)c.index, ni = (int)(c.index+c.count); i < ni; ++i)
 			{
 				const rcCompactSpan& s = chf.spans[i];
+				
 				
 				if (rcGetCon(s, 2) != RC_NOT_CONNECTED)
 				{
@@ -355,6 +367,8 @@ void rcMarkBoxArea(rcContext* ctx, const float* bmin, const float* bmax, rcAreaM
 }
 
 
+// 判断点是否在多边形内
+// 只考虑x、z坐标
 static int pointInPoly(int nvert, const float* verts, const float* p)
 {
 	int i, j, c = 0;
@@ -362,8 +376,9 @@ static int pointInPoly(int nvert, const float* verts, const float* p)
 	{
 		const float* vi = &verts[i*3];
 		const float* vj = &verts[j*3];
+		// p点沿着z轴向上做一条射线，看这条射线与 多边形 的边的交点个数，为奇数说明点在多边形内部。
 		if (((vi[2] > p[2]) != (vj[2] > p[2])) &&
-			(p[0] < (vj[0]-vi[0]) * (p[2]-vi[2]) / (vj[2]-vi[2]) + vi[0]) )
+			(p[0] < (vj[0]-vi[0]) * (p[2]-vi[2]) / (vj[2]-vi[2]) + vi[0]) )  // 公式： y = k * (x - 已知点的x) + 已知点的y；符合这个条件时，p点的x < 这条边上的值，那p往上做一条射线就一定与这条边相交。
 			c = !c;
 	}
 	return c;
@@ -385,6 +400,7 @@ void rcMarkConvexPolyArea(rcContext* ctx, const float* verts, const int nverts,
 	
 	rcScopedTimer timer(ctx, RC_TIMER_MARK_CONVEXPOLY_AREA);
 
+	// 这个convex volume的包围盒
 	float bmin[3], bmax[3];
 	rcVcopy(bmin, verts);
 	rcVcopy(bmax, verts);
@@ -396,6 +412,7 @@ void rcMarkConvexPolyArea(rcContext* ctx, const float* verts, const int nverts,
 	bmin[1] = hmin;
 	bmax[1] = hmax;
 
+	// 转化为compact height field坐标系下的，以cell为单位的
 	int minx = (int)((bmin[0]-chf.bmin[0])/chf.cs);
 	int miny = (int)((bmin[1]-chf.bmin[1])/chf.ch);
 	int minz = (int)((bmin[2]-chf.bmin[2])/chf.cs);
@@ -403,11 +420,13 @@ void rcMarkConvexPolyArea(rcContext* ctx, const float* verts, const int nverts,
 	int maxy = (int)((bmax[1]-chf.bmin[1])/chf.ch);
 	int maxz = (int)((bmax[2]-chf.bmin[2])/chf.cs);
 	
+	// convexVolume与compact height field不相交
 	if (maxx < 0) return;
 	if (minx >= chf.width) return;
 	if (maxz < 0) return;
 	if (minz >= chf.height) return;
 	
+	// 把convex volume限定到compact hf的范围
 	if (minx < 0) minx = 0;
 	if (maxx >= chf.width) maxx = chf.width-1;
 	if (minz < 0) minz = 0;
@@ -425,14 +444,14 @@ void rcMarkConvexPolyArea(rcContext* ctx, const float* verts, const int nverts,
 				rcCompactSpan& s = chf.spans[i];
 				if (chf.areas[i] == RC_NULL_AREA)
 					continue;
-				if ((int)s.y >= miny && (int)s.y <= maxy)
+				if ((int)s.y >= miny && (int)s.y <= maxy) // 这个open span的区间 在这个convex volumn的内。x、y是否在 在后面判断
 				{
 					float p[3];
 					p[0] = chf.bmin[0] + (x+0.5f)*chf.cs; 
 					p[1] = 0;
-					p[2] = chf.bmin[2] + (z+0.5f)*chf.cs; 
+					p[2] = chf.bmin[2] + (z+0.5f)*chf.cs; // open span矩形中心点
 
-					if (pointInPoly(nverts, verts, p))
+					if (pointInPoly(nverts, verts, p)) // 点是否在 convex volumn的 水平投影内
 					{
 						areaMod.apply(chf.areas[i]);
 					}

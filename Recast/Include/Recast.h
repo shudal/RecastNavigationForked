@@ -353,6 +353,7 @@ struct rcCompactSpan
 	unsigned short y;			///< The lower extent of the span. (Measured from the heightfield's base.)
 	unsigned short reg;			///< The id of the region the span belongs to. (Or zero if not in a region.)
 	unsigned int con : 24;		///< Packed neighbor connection data.
+								// 只使用了这个int的24位 来存储数据。每个方向使用六位。
 	unsigned int h : 8;			///< The height of the span.  (Measured from #y.)
 };
 
@@ -365,7 +366,7 @@ struct rcCompactHeightfield
 	
 	int width;					///< The width of the heightfield. (Along the x-axis in cell units.)
 	int height;					///< The height of the heightfield. (Along the z-axis in cell units.)
-	int spanCount;				///< The number of spans in the heightfield.
+	int spanCount;				///< The number of spans in the heightfield. 等于 solid heightfield的span个数
 	int walkableHeight;			///< The walkable height used during the build of the field.  (See: rcConfig::walkableHeight)
 	int walkableClimb;			///< The walkable climb used during the build of the field. (See: rcConfig::walkableClimb)
 	int borderSize;				///< The AABB border size used during the build of the field. (See: rcConfig::borderSize)
@@ -1234,6 +1235,9 @@ inline void rcSetCon(rcCompactSpan& span, int direction, int neighborIndex)
 {
 	const unsigned int shift = (unsigned int)direction * 6;
 	const unsigned int con = span.con;
+	// 0x3f是二进制11 1111，共六位。每个方向有6位存储数据。
+	//		con & ~(0x3f << shift) 抹掉这个方向的6位的数据 并 保留其他方向的数据
+	//		| neighborIndex & 0x3f) << shift 将neighborIndex写入到con。这个操作会覆盖span.con原有的数据，但无所谓，因为一个open span在一个方向上本来也只有一个邻居span
 	span.con = (con & ~(0x3f << shift)) | (((unsigned int)neighborIndex & 0x3f) << shift);
 }
 
@@ -1247,6 +1251,7 @@ inline int rcGetCon(const rcCompactSpan& span, int direction)
 	return (span.con >> shift) & 0x3f;
 }
 
+// direction 0->4 左、上、右、下
 /// Gets the standard width (x-axis) offset for the specified direction.
 /// @param[in]		direction		The direction. [Limits: 0 <= value < 4]
 /// @return The width offset to apply to the current cell position to move in the direction.

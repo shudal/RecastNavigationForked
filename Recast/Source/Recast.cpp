@@ -455,6 +455,7 @@ bool rcBuildCompactHeightfield(rcContext* context, const int walkableHeight, con
 
 	const int xSize = heightfield.width;
 	const int zSize = heightfield.height;
+	// 遍历heightfield获取有多少个span
 	const int spanCount = rcGetHeightFieldSpanCount(context, heightfield);
 
 	// Fill in header.
@@ -476,6 +477,7 @@ bool rcBuildCompactHeightfield(rcContext* context, const int walkableHeight, con
 		return false;
 	}
 	memset(compactHeightfield.cells, 0, sizeof(rcCompactCell) * xSize * zSize);
+	// 虽然分配了 spanCount 个，但实际不一定会用完
 	compactHeightfield.spans = (rcCompactSpan*)rcAlloc(sizeof(rcCompactSpan) * spanCount, RC_ALLOC_PERM);
 	if (!compactHeightfield.spans)
 	{
@@ -493,11 +495,15 @@ bool rcBuildCompactHeightfield(rcContext* context, const int walkableHeight, con
 
 	const int MAX_HEIGHT = 0xffff;
 
+	// compactHeightfield.spans 中的下标
 	// Fill in cells and spans.
 	int currentCellIndex = 0;
 	const int numColumns = xSize * zSize;
+	// 这个循环 创建出所有的open span（设置open span的底、顶）
 	for (int columnIndex = 0; columnIndex < numColumns; ++columnIndex)
 	{
+		// 处理一个cell column的东西
+		
 		const rcSpan* span = heightfield.spans[columnIndex];
 			
 		// If there are no spans at this cell, just leave the data to index=0, count=0.
@@ -510,6 +516,8 @@ bool rcBuildCompactHeightfield(rcContext* context, const int walkableHeight, con
 		cell.index = currentCellIndex;
 		cell.count = 0;
 
+		// 当一个cell column没有可行走的span时，这个cell column 也没有open span
+		// 一个cell column底部 到 第一个span 这个区间 不是 open span
 		for (; span != NULL; span = span->next)
 		{
 			if (span->area != RC_NULL_AREA)
@@ -525,6 +533,9 @@ bool rcBuildCompactHeightfield(rcContext* context, const int walkableHeight, con
 		}
 	}
 	
+	// 将可相互行走的 两个open span连接起来
+	
+	// 当前值为62.当邻居格子的open 数量超过(62 + 1)=63时，不会去设置 当前span与这个span 连接。因为span.con这个字段只给每个邻居span存储的下标最大值为63(0x3f、6bit)
 	// Find neighbour connections.
 	const int MAX_LAYERS = RC_NOT_CONNECTED - 1;
 	int maxLayerIndex = 0;
@@ -533,6 +544,8 @@ bool rcBuildCompactHeightfield(rcContext* context, const int walkableHeight, con
 	{
 		for (int x = 0; x < xSize; ++x)
 		{
+			// 遍历 open span
+
 			const rcCompactCell& cell = compactHeightfield.cells[x + z * zStride];
 			for (int i = (int)cell.index, ni = (int)(cell.index + cell.count); i < ni; ++i)
 			{
@@ -558,6 +571,8 @@ bool rcBuildCompactHeightfield(rcContext* context, const int walkableHeight, con
 						const int bot = rcMax(span.y, neighborSpan.y);
 						const int top = rcMin(span.y + span.h, neighborSpan.y + neighborSpan.h);
 
+						// 第一个条件是 两个open span走来走去时不碰头
+						// 第二个条件 两个open span走来走去时不跌落太多
 						// Check that the gap between the spans is walkable,
 						// and that the climb height between the gaps is not too high.
 						if ((top - bot) >= walkableHeight && rcAbs((int)neighborSpan.y - (int)span.y) <= walkableClimb)
@@ -569,6 +584,7 @@ bool rcBuildCompactHeightfield(rcContext* context, const int walkableHeight, con
 								maxLayerIndex = rcMax(maxLayerIndex, layerIndex);
 								continue;
 							}
+							// 设置在dir方向上 与当前span连接的span的下标
 							rcSetCon(span, dir, layerIndex);
 							break;
 						}

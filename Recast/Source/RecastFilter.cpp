@@ -69,7 +69,7 @@ void rcFilterLowHangingWalkableObstacles(rcContext* context, const int walkableC
 
 // 其他情况
 //		1 当前span上面的区间高度 < walkableHeight，此函数不会将当前span设为不可走。后续调用的 rcFilterWalkableLowHeightSpans 可以处理这种情况。
-//		2 邻居区间 都不是有效邻居区间，此函数也不会将当前span设为不可走。
+//		2 邻居区间 都不是有效邻居区间，此函数也不会将当前span设为不可走。后续创建compact height field时，会将自己和这样的邻居设为不连通。
 //		 
 void rcFilterLedgeSpans(rcContext* context, const int walkableHeight, const int walkableClimb,
                         rcHeightfield& heightfield)
