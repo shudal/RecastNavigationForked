@@ -36,6 +36,7 @@ struct LevelStackEntry
 };
 }  // namespace
 
+// 类似 rcErodeWalkableArea。不过 rcErodeWalkableArea 那里认为RC_NULL_AREA的span是边界，而这个函数是 【区域类型不同的区域即为边界span】
 static void calculateDistanceField(rcCompactHeightfield& chf, unsigned short* src, unsigned short& maxDist)
 {
 	const int w = chf.width;
@@ -68,6 +69,7 @@ static void calculateDistanceField(rcCompactHeightfield& chf, unsigned short* sr
 							nc++;
 					}
 				}
+				// 四个邻居open span中，只有有一个和自己的不同区域标记不同，就认为自己是boundary span
 				if (nc != 4)
 					src[i] = 0;
 			}
@@ -189,6 +191,9 @@ static void calculateDistanceField(rcCompactHeightfield& chf, unsigned short* sr
 	
 }
 
+// boxBlue平滑 open span 到边界的距离值。
+// 通过卷积来平滑。平滑九宫格内的。
+// 结果存在dst里
 static unsigned short* boxBlur(rcCompactHeightfield& chf, int thr,
 							   unsigned short* src, unsigned short* dst)
 {
@@ -213,6 +218,7 @@ static unsigned short* boxBlur(rcCompactHeightfield& chf, int thr,
 				}
 
 				int d = (int)cd;
+				// direction 0->4 左、上、右、下
 				for (int dir = 0; dir < 4; ++dir)
 				{
 					if (rcGetCon(s, dir) != RC_NOT_CONNECTED)
@@ -259,6 +265,7 @@ static bool floodRegion(int x, int y, int i,
 	
 	const unsigned char area = chf.areas[i];
 	
+	// stack用来实现非递归搜索
 	// Flood fill mark region.
 	stack.clear();
 	stack.push_back(LevelStackEntry(x, y, i));
@@ -278,6 +285,8 @@ static bool floodRegion(int x, int y, int i,
 		
 		const rcCompactSpan& cs = chf.spans[ci];
 		
+		// 8方向搜索
+		// 找到与【当前span 邻接的、相同area类型的、非不可走border区域的、已有和自己不同区域id 】的【span的area id】，结果写入 ar
 		// Check if any of the neighbours already have a valid region set.
 		unsigned short ar = 0;
 		for (int dir = 0; dir < 4; ++dir)
@@ -298,7 +307,7 @@ static bool floodRegion(int x, int y, int i,
 					ar = nr;
 					break;
 				}
-				
+
 				const rcCompactSpan& as = chf.spans[ai];
 				
 				const int dir2 = (dir+1) & 0x3;
@@ -320,12 +329,15 @@ static bool floodRegion(int x, int y, int i,
 		}
 		if (ar != 0)
 		{
+			// 说明当前节点处于区域相交处，不扩展该节点
 			srcReg[ci] = 0;
 			continue;
 		}
 		
+		// 记录有给 多少个span设定 unique 区域id 
 		count++;
 		
+		// 从当前span 扩散
 		// Expand neighbours.
 		for (int dir = 0; dir < 4; ++dir)
 		{
@@ -336,8 +348,10 @@ static bool floodRegion(int x, int y, int i,
 				const int ai = (int)chf.cells[ax+ay*w].index + rcGetCon(cs, dir);
 				if (chf.areas[ai] != area)
 					continue;
+				// 和自己连通的、同一area类型的、距离不小于 自己-2 的、还没有区域的
 				if (chf.dist[ai] >= lev && srcReg[ai] == 0)
 				{
+					// 非递归dfs
 					srcReg[ai] = r;
 					srcDist[ai] = 0;
 					stack.push_back(LevelStackEntry(ax, ay, ai));
@@ -369,6 +383,8 @@ static void expandRegions(int maxIter, unsigned short level,
 
 	if (fillStack)
 	{
+		// 传入的stack本来其实也是空的
+		// 将compact hf中所有 还没找到区域的、可走的 hf span加入stack
 		// Find cells revealed by the raised level.
 		stack.clear();
 		for (int y = 0; y < h; ++y)
@@ -401,6 +417,7 @@ static void expandRegions(int maxIter, unsigned short level,
 	int iter = 0;
 	while (stack.size() > 0)
 	{
+		// 表示当前要处理的这个stack中，已经找到regeion的 open span的数量
 		int failed = 0;
 		dirtyEntries.clear();
 		
@@ -414,11 +431,12 @@ static void expandRegions(int maxIter, unsigned short level,
 				failed++;
 				continue;
 			}
-			
+			// 现在要处理的都是 还没有regeion的 open span
 			unsigned short r = srcReg[i];
 			unsigned short d2 = 0xffff;
 			const unsigned char area = chf.areas[i];
 			const rcCompactSpan& s = chf.spans[i];
+			// 找到邻居中的 连通的、同一area类型、已有区域 的邻居。这样可以得到自己的regeon和srcDist值（=邻居的+2）
 			for (int dir = 0; dir < 4; ++dir)
 			{
 				if (rcGetCon(s, dir) == RC_NOT_CONNECTED) continue;
@@ -437,6 +455,7 @@ static void expandRegions(int maxIter, unsigned short level,
 			}
 			if (r)
 			{
+				// 标记找到，这样在所有的maxIter此循环中，只会为一个idx处理一次
 				stack[j].index = -1; // mark as used
 				dirtyEntries.push_back(DirtyEntry(i, r, d2));
 			}
@@ -453,6 +472,7 @@ static void expandRegions(int maxIter, unsigned short level,
 			srcDist[idx] = dirtyEntries[i].distance2;
 		}
 		
+		// 要处理的这个stack中所有的span都找到regeion了
 		if (failed == stack.size())
 			break;
 		
@@ -466,7 +486,10 @@ static void expandRegions(int maxIter, unsigned short level,
 }
 
 
-
+// 只有可走、没有找到区域 的open span会被写入stack中
+// >= startLevel 的放入第0层 
+// < startLevel 的那7层也写入stack。更小的不写入
+// 弄这个函数是为了免得一次为所有层分配内存 导致内存消耗过大
 static void sortCellsByLevel(unsigned short startLevel,
 							  rcCompactHeightfield& chf,
 							  const unsigned short* srcReg,
@@ -475,6 +498,7 @@ static void sortCellsByLevel(unsigned short startLevel,
 {
 	const int w = chf.width;
 	const int h = chf.height;
+	// startLevel /= 2,后面的 chf.dist[i] 也会跟着有这个操作。传入的是距离，除之后是下标
 	startLevel = startLevel >> loglevelsPerStack;
 
 	for (unsigned int j=0; j<nbStacks; ++j)
@@ -488,6 +512,7 @@ static void sortCellsByLevel(unsigned short startLevel,
 			const rcCompactCell& c = chf.cells[x+y*w];
 			for (int i = (int)c.index, ni = (int)(c.index+c.count); i < ni; ++i)
 			{
+				// 只有可走、没有找到区域 的open span会被写入stack中
 				if (chf.areas[i] == RC_NULL_AREA || srcReg[i] != 0)
 					continue;
 
@@ -1262,12 +1287,14 @@ bool rcBuildDistanceField(rcContext* ctx, rcCompactHeightfield& chf)
 		chf.dist = 0;
 	}
 	
+	// 保存open span到边界span 的距离
 	unsigned short* src = (unsigned short*)rcAlloc(sizeof(unsigned short)*chf.spanCount, RC_ALLOC_TEMP);
 	if (!src)
 	{
 		ctx->log(RC_LOG_ERROR, "rcBuildDistanceField: Out of memory 'src' (%d).", chf.spanCount);
 		return false;
 	}
+	// 通过卷积src 来平滑距离，保存到dst中
 	unsigned short* dst = (unsigned short*)rcAlloc(sizeof(unsigned short)*chf.spanCount, RC_ALLOC_TEMP);
 	if (!dst)
 	{
@@ -1542,21 +1569,26 @@ bool rcBuildRegions(rcContext* ctx, rcCompactHeightfield& chf,
 	ctx->startTimer(RC_TIMER_BUILD_REGIONS_WATERSHED);
 
 	const int LOG_NB_STACKS = 3;
+	//8
 	const int NB_STACKS = 1 << LOG_NB_STACKS;
 	rcTempVector<LevelStackEntry> lvlStacks[NB_STACKS];
 	for (int i=0; i<NB_STACKS; ++i)
 		lvlStacks[i].reserve(256);
 
+	// stack用来实现非递归搜索
 	rcTempVector<LevelStackEntry> stack;
 	stack.reserve(256);
 	
+	// srcReg的Reg是region的意思。从下标到区域id的映射
 	unsigned short* srcReg = buf;
+	// srcDist存的是 下标 到 【到区域中心的距离(距离边界最大的span就是最中心的span，这个span的srcDist下存的是0)】
 	unsigned short* srcDist = buf+chf.spanCount;
 	
 	memset(srcReg, 0, sizeof(unsigned short)*chf.spanCount);
 	memset(srcDist, 0, sizeof(unsigned short)*chf.spanCount);
 	
 	unsigned short regionId = 1;
+	// 变偶数。这个偶数level >= maxDistance
 	unsigned short level = (chf.maxDistance+1) & ~1;
 
 	// TODO: Figure better formula, expandIters defines how much the 
@@ -1584,6 +1616,8 @@ bool rcBuildRegions(rcContext* ctx, rcCompactHeightfield& chf,
 	while (level > 0)
 	{
 		level = level >= 2 ? level-2 : 0;
+
+		// 相当于 sId = ( (sId + 1) % 8)。sId的值会在[0,7]中不断循环
 		sId = (sId+1) & (NB_STACKS-1);
 
 //		ctx->startTimer(RC_TIMER_DIVIDE_TO_LEVELS);
@@ -1591,6 +1625,8 @@ bool rcBuildRegions(rcContext* ctx, rcCompactHeightfield& chf,
 		if (sId == 0)
 			sortCellsByLevel(level, chf, srcReg, NB_STACKS, lvlStacks, 1);
 		else 
+			// 前一级中 srcReg[i] 为0(没有给span划定区域的) 的，挪到当前的里面里
+			// 比如 上次循环中 floodRegion 中认为为交界的那些span
 			appendStacks(lvlStacks[sId-1], lvlStacks[sId], srcReg); // copy left overs from last level
 
 //		ctx->stopTimer(RC_TIMER_DIVIDE_TO_LEVELS);
@@ -1598,6 +1634,7 @@ bool rcBuildRegions(rcContext* ctx, rcCompactHeightfield& chf,
 		{
 			rcScopedTimer timerExpand(ctx, RC_TIMER_BUILD_REGIONS_EXPAND);
 
+			// 函数结果是修改 srcReg、srcDist
 			// Expand current regions until no empty connected cells found.
 			expandRegions(expandIters, level, chf, srcReg, srcDist, lvlStacks[sId], false);
 		}
@@ -1612,10 +1649,12 @@ bool rcBuildRegions(rcContext* ctx, rcCompactHeightfield& chf,
 				int x = current.x;
 				int y = current.y;
 				int i = current.index;
+				// 处理每个没有找到区域的span
 				if (i >= 0 && srcReg[i] == 0)
 				{
 					if (floodRegion(x, y, i, level, regionId, chf, srcReg, srcDist, stack))
 					{
+						// 最多65536个区域
 						if (regionId == 0xFFFF)
 						{
 							ctx->log(RC_LOG_ERROR, "rcBuildRegions: Region ID overflow");
@@ -1629,6 +1668,8 @@ bool rcBuildRegions(rcContext* ctx, rcCompactHeightfield& chf,
 		}
 	}
 	
+	// 为前面所有剩下的还没找到的 找区域id。
+	// 为啥还会有这些呢？比如上面最后一次循环，floodRegion()认为某些span是区域交界的span，那这些span的区域就不会被设定。
 	// Expand current regions until no empty connected cells found.
 	expandRegions(expandIters*8, 0, chf, srcReg, srcDist, stack, true);
 	

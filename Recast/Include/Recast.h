@@ -351,6 +351,7 @@ struct rcCompactCell
 struct rcCompactSpan
 {
 	unsigned short y;			///< The lower extent of the span. (Measured from the heightfield's base.)
+	// 区域id。生成区域时赋值
 	unsigned short reg;			///< The id of the region the span belongs to. (Or zero if not in a region.)
 	unsigned int con : 24;		///< Packed neighbor connection data.
 								// 只使用了这个int的24位 来存储数据。每个方向使用六位。
@@ -370,7 +371,9 @@ struct rcCompactHeightfield
 	int walkableHeight;			///< The walkable height used during the build of the field.  (See: rcConfig::walkableHeight)
 	int walkableClimb;			///< The walkable climb used during the build of the field. (See: rcConfig::walkableClimb)
 	int borderSize;				///< The AABB border size used during the build of the field. (See: rcConfig::borderSize)
+	//  区域生成时写入。open span到边界span的最大值。这个值是未经平滑的。
 	unsigned short maxDistance;	///< The maximum distance value of any span within the field. 
+	// 比 赋给span 的所有 区域id 中的最大值 大1
 	unsigned short maxRegions;	///< The maximum region id of any span within the field. 
 	float bmin[3];				///< The minimum bounds in world space. [(x, y, z)]
 	float bmax[3];				///< The maximum bounds in world space. [(x, y, z)]
@@ -378,7 +381,11 @@ struct rcCompactHeightfield
 	float ch;					///< The height of each cell. (The minimum increment along the y-axis.)
 	rcCompactCell* cells;		///< Array of cells. [Size: #width*#height]
 	rcCompactSpan* spans;		///< Array of spans. [Size: #spanCount]
+	// 区域生成时写入。保存open span到边界的距离。这个值是经过九宫格卷积平滑后的
 	unsigned short* dist;		///< Array containing border distance data. [Size: #spanCount]
+	// 如果一个open span属于某个convexVolumn，则会修改areas的值
+	// 如果某个open span不满足walkable radius的限制，也会在areas下标记上
+	// 对于可走的open span,areas[idx]下会标记为可走
 	unsigned char* areas;		///< Array containing area id data. [Size: #spanCount]
 	
 private:
@@ -618,6 +625,7 @@ void rcFreePolyMeshDetail(rcPolyMeshDetail* detailMesh);
 /// region and its spans are considered un-walkable.
 /// (Used during the region and contour build process.)
 /// @see rcCompactSpan::reg
+/// 0x8000,16bit中的最高位为1
 static const unsigned short RC_BORDER_REG = 0x8000;
 
 /// Polygon touches multiple regions.
