@@ -562,10 +562,13 @@ struct rcRegion
 	unsigned char areaType;			// Are type.
 	bool remap;
 	bool visited;
+	// 同一个cell column下，若两个open span区域相同，则这个区域的overlap为true
 	bool overlap;
 	bool connectsToBorder;
 	unsigned short ymin, ymax;
+	// 值是区域id。存的是与当前区域接壤的区域们
 	rcIntArray connections;
+	// 值是区域id
 	rcIntArray floors;
 };
 
@@ -844,6 +847,7 @@ static bool mergeAndFilterRegions(rcContext* ctx, int minRegionArea, int mergeRe
 				rcRegion& reg = regions[r];
 				reg.spanCount++;
 				
+
 				// Update floors.
 				for (int j = (int)c.index; j < ni; ++j)
 				{
@@ -851,6 +855,7 @@ static bool mergeAndFilterRegions(rcContext* ctx, int minRegionArea, int mergeRe
 					unsigned short floorId = srcReg[j];
 					if (floorId == 0 || floorId >= nreg)
 						continue;
+					// 同一个cell column下，若两个open span区域相同，则这个区域的overlap为true
 					if (floorId == r)
 						reg.overlap = true;
 					addUniqueFloorRegion(reg, floorId);
@@ -866,6 +871,7 @@ static bool mergeAndFilterRegions(rcContext* ctx, int minRegionArea, int mergeRe
 				int ndir = -1;
 				for (int dir = 0; dir < 4; ++dir)
 				{
+					// 只要邻居span 和自己的区域id不同，就说明是当前span是边界span
 					if (isSolidEdge(chf, srcReg, x, y, i, dir))
 					{
 						ndir = dir;
@@ -875,6 +881,7 @@ static bool mergeAndFilterRegions(rcContext* ctx, int minRegionArea, int mergeRe
 				
 				if (ndir != -1)
 				{
+					// 结果写入 reg.connections
 					// The cell is at border.
 					// Walk around the contour to find all the neighbours.
 					walkContour(x, y, i, ndir, chf, srcReg, reg.connections);

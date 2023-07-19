@@ -269,7 +269,7 @@ struct rcConfig
 	/// The minimum number of cells allowed to form isolated island areas. [Limit: >=0] [Units: vx] 
 	int minRegionArea;
 	
-	/// Any regions with a span count smaller than this value will, if possible, 
+	/// Any regions(指连通的regeion们) with a span count smaller than this value will, if possible, 
 	/// be merged with larger regions. [Limit: >=0] [Units: vx] 
 	int mergeRegionArea;
 	
