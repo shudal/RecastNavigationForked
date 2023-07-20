@@ -100,6 +100,7 @@ static int getCornerHeight(int x, int y, int i, int dir,
 	return ch;
 }
 
+// 沿着区域边走，一边走一边生成轮廓点 到 points 中
 static void walkContour(int x, int y, int i,
 						rcCompactHeightfield& chf,
 						unsigned char* flags, rcIntArray& points)
@@ -123,6 +124,7 @@ static void walkContour(int x, int y, int i,
 			bool isBorderVertex = false;
 			bool isAreaBorder = false;
 			int px = x;
+			//当前open span右上角 这四个span的 下表面最大值 
 			int py = getCornerHeight(x, y, i, dir, chf, isBorderVertex);
 			int pz = y;
 			switch(dir)
@@ -182,7 +184,7 @@ static void walkContour(int x, int y, int i,
 		}
 	}
 }
-
+// 点(x,z)到线段(px,pz) - (qx,qz)的距离。返回的结果是距离的平方
 static float distancePtSeg(const int x, const int z,
 						   const int px, const int pz,
 						   const int qx, const int qz)
@@ -213,6 +215,7 @@ static void simplifyContour(rcIntArray& points, rcIntArray& simplified,
 	bool hasConnections = false;
 	for (int i = 0; i < points.size(); i += 4)
 	{
+		// 区域id 为0，则if判断为false
 		if ((points[i+3] & RC_CONTOUR_REG_MASK) != 0)
 		{
 			hasConnections = true;
@@ -364,6 +367,7 @@ static void simplifyContour(rcIntArray& points, rcIntArray& simplified,
 		}
 	}
 	
+	// 选长边 下标在两点中间 的轮廓点 来拆这个长边
 	// Split too long edges.
 	if (maxEdgeLen > 0 && (buildFlags & (RC_CONTOUR_TESS_WALL_EDGES|RC_CONTOUR_TESS_AREA_EDGES)) != 0)
 	{
@@ -649,12 +653,15 @@ static bool mergeContours(rcContour& ca, rcContour& cb, int ia, int ib)
 struct rcContourHole
 {
 	rcContour* contour;
+	// leftmost是 contour->verts数组中的下标。
+	// minx,minz表示出空洞轮廓的左下角点
 	int minx, minz, leftmost;
 };
 
 struct rcContourRegion
 {
 	rcContour* outline;
+	// 数组。元素有 nholes 个
 	rcContourHole* holes;
 	int nholes;
 };
@@ -717,7 +724,7 @@ static int compareDiagDist(const void* va, const void* vb)
 	return 0;
 }
 
-
+// 轮廓生成阶段。轮廓中有空洞，那么合并
 static void mergeRegionHoles(rcContext* ctx, rcContourRegion& region)
 {
 	// Sort holes from left to right.
@@ -924,6 +931,8 @@ bool rcBuildContours(rcContext* ctx, rcCompactHeightfield& chf,
 				simplified.clear();
 				
 				ctx->startTimer(RC_TIMER_BUILD_CONTOURS_TRACE);
+				// 访问过的边，这个函数会修改 flags 以便后续不再访问这个边
+				// 沿着区域边走，一边走一边生成轮廓点 到 points 中
 				walkContour(x, y, i, chf, flags, verts);
 				ctx->stopTimer(RC_TIMER_BUILD_CONTOURS_TRACE);
 				

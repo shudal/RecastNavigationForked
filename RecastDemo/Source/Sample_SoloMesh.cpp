@@ -585,6 +585,7 @@ bool Sample_SoloMesh::handleBuild()
 		}
 	}
 	
+	// ÂÖÀªÉú³É
 	//
 	// Step 5. Trace and simplify region contours.
 	//

@@ -262,6 +262,7 @@ struct rcConfig
 	/// The maximum allowed length for contour edges along the border of the mesh. [Limit: >=0] [Units: vx] 
 	int maxEdgeLen;
 	
+	// 点到直线的距离，单位是cell。考虑的是x、z平面的
 	/// The maximum distance a simplified contour's border edges should deviate 
 	/// the original raw contour. [Limit: >=0] [Units: vx]
 	float maxSimplificationError;
@@ -435,6 +436,7 @@ private:
 /// Represents a simple, non-overlapping contour in field space.
 struct rcContour
 {
+	// 轮廓生成的最后 会合并空洞，这个 会对 verts、nverts修改
 	int* verts;			///< Simplified contour vertex and connection data. [Size: 4 * #nverts]
 	int nverts;			///< The number of vertices in the simplified contour. 
 	int* rverts;		///< Raw contour vertex and connection data. [Size: 4 * #nrverts]
@@ -450,7 +452,7 @@ struct rcContourSet
 	rcContourSet();
 	~rcContourSet();
 	
-	rcContour* conts;	///< An array of the contours in the set. [Size: #nconts]
+	rcContour* conts;	///< An array of the contours in the set. [Size: #nconts] 由点组成
 	int nconts;			///< The number of contours in the set.
 	float bmin[3];  	///< The minimum bounds in world space. [(x, y, z)]
 	float bmax[3];		///< The maximum bounds in world space. [(x, y, z)]
