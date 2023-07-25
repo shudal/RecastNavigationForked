@@ -1089,6 +1089,7 @@ bool rcBuildPolyMesh(rcContext* ctx, rcContourSet& cset, const int nvp, rcPolyMe
 		ctx->log(RC_LOG_ERROR, "rcBuildPolyMesh: Out of memory 'tris' (%d).", maxVertsPerCont*3);
 		return false;
 	}
+	// 遍历处理每个轮廓时，都会清理一下
 	rcScopedDelete<unsigned short> polys((unsigned short*)rcAlloc(sizeof(unsigned short)*(maxVertsPerCont+1)*nvp, RC_ALLOC_TEMP));
 	if (!polys)
 	{
@@ -1131,6 +1132,7 @@ bool rcBuildPolyMesh(rcContext* ctx, rcContourSet& cset, const int nvp, rcPolyMe
 		for (int j = 0; j < cont.nverts; ++j)
 		{
 			const int* v = &cont.verts[j*4];
+			// j -> 轮廓点索引，indices[j] -> mesh.verts里的索引
 			indices[j] = addVertex((unsigned short)v[0], (unsigned short)v[1], (unsigned short)v[2],
 								   mesh.verts, firstVert, nextVert, mesh.nverts);
 			if (v[3] & RC_BORDER_VERTEX)
@@ -1142,6 +1144,8 @@ bool rcBuildPolyMesh(rcContext* ctx, rcContourSet& cset, const int nvp, rcPolyMe
 
 		// Build initial polygons.
 		int npolys = 0;
+		// 遍历处理每个轮廓时，都会清理一下
+		//polys数组记录了 当前处理的轮廓 对应的poly们
 		memset(polys, 0xff, maxVertsPerCont*nvp*sizeof(unsigned short));
 		for (int j = 0; j < ntris; ++j)
 		{
@@ -1187,6 +1191,7 @@ bool rcBuildPolyMesh(rcContext* ctx, rcContourSet& cset, const int nvp, rcPolyMe
 				
 				if (bestMergeVal > 0)
 				{
+					// 合并两个poly。合并后，删除 polys 数组中的最后一个元素。
 					// Found best, merge.
 					unsigned short* pa = &polys[bestPa*nvp];
 					unsigned short* pb = &polys[bestPb*nvp];
@@ -1204,6 +1209,7 @@ bool rcBuildPolyMesh(rcContext* ctx, rcContourSet& cset, const int nvp, rcPolyMe
 			}
 		}
 		
+		// 把当前轮廓的所有poly拷贝到 mesh上
 		// Store polygons.
 		for (int j = 0; j < npolys; ++j)
 		{
@@ -1245,6 +1251,12 @@ bool rcBuildPolyMesh(rcContext* ctx, rcContourSet& cset, const int nvp, rcPolyMe
 		}
 	}
 	
+	// 到了这里，所有轮廓的信息已转为 多边形们的 信息
+	
+
+	//		每个多边形polys中固定占用 m_cfg.maxVertsPerPoly * 2 个。
+	//			占用的这些元素，前一半是表示多边形的顶点，数组元素值对应的是 verts中的下标；
+	//			后一半表示 顶点和下一个顶点形成的边 与哪个多边形邻接，值对应的是 polys数组的索引。所有这些后一半的数据，就是在下面这个函数里填充的
 	// Calculate adjacency.
 	if (!buildMeshAdjacency(mesh.polys, mesh.npolys, mesh.nverts, nvp))
 	{

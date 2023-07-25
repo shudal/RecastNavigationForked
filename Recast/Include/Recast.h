@@ -476,11 +476,17 @@ struct rcPolyMesh
 	rcPolyMesh();
 	~rcPolyMesh();
 	
+	// 轮廓点坐标
 	unsigned short* verts;	///< The mesh vertices. [Form: (x, y, z) * #nverts]
+	// 记录了 compact hf下的 所有轮廓 的 所有(三角化、凸多边形化)处理后的多边形
+	//		每个多边形polys中固定占用 m_cfg.maxVertsPerPoly * 2 个。
+	//			占用的这些元素，前一半是表示多边形的顶点，数组元素值对应的是 verts中的下标；
+	//			后一半表示 顶点和下一个顶点形成的边 与哪个多边形邻接，值对应的是 polys数组的索引
 	unsigned short* polys;	///< Polygon and neighbor data. [Length: #maxpolys * 2 * #nvp]
 	unsigned short* regs;	///< The region id assigned to each polygon. [Length: #maxpolys]
 	unsigned short* flags;	///< The user defined flags for each polygon. [Length: #maxpolys]
 	unsigned char* areas;	///< The area id assigned to each polygon. [Length: #maxpolys]
+	// 代码中硬编码写死，最能只支持到有2^16-1 = 65535个
 	int nverts;				///< The number of vertices.
 	int npolys;				///< The number of polygons.
 	int maxpolys;			///< The number of allocated polygons.
