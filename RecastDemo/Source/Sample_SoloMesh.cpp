@@ -630,7 +630,7 @@ bool Sample_SoloMesh::handleBuild()
 		m_ctx->log(RC_LOG_ERROR, "buildNavigation: Out of memory 'pmdtl'.");
 		return false;
 	}
-
+	// 前面的这些步骤，虽然有得到了轮廓们的顶点们的坐标（包含高度）；但对于轮廓多边形，这个多边形中间的大片范围 的高度是没有定的，只定了边界的高度。
 	if (!rcBuildPolyMeshDetail(m_ctx, *m_pmesh, *m_chf, m_cfg.detailSampleDist, m_cfg.detailSampleMaxError, *m_dmesh))
 	{
 		m_ctx->log(RC_LOG_ERROR, "buildNavigation: Could not build detail mesh.");

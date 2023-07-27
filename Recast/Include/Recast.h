@@ -512,9 +512,14 @@ struct rcPolyMeshDetail
 	rcPolyMeshDetail();
 	~rcPolyMeshDetail();
 	
+	// 每个子mesh有4个元素。顶点的起始索引,顶点个数,三角形的起始索引,三角形的个数
+	//		顶点的起始索引(verts数组中的下标),顶点个数 对应的是verts数组。
+	//		三角形的起始索引(tris数组中的下标),三角形的个数
 	unsigned int* meshes;	///< The sub-mesh data. [Size: 4*#nmeshes] 
+	// 世界坐标
 	float* verts;			///< The mesh vertices. [Size: 3*#nverts] 
 	unsigned char* tris;	///< The mesh triangles. [Size: 4*#ntris] 
+	// rcPolyMesh 有多少个多边形，这里这个就有多少个子mesh
 	int nmeshes;			///< The number of sub-meshes defined by #meshes.
 	int nverts;				///< The number of vertices in #verts.
 	int ntris;				///< The number of triangles in #tris.

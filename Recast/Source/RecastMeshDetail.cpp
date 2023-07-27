@@ -32,6 +32,8 @@ struct rcHeightPatch
 {
 	inline rcHeightPatch() : data(0), xmin(0), ymin(0), width(0), height(0) {}
 	inline ~rcHeightPatch() { rcFree(data); }
+	// 共有 width * height 个元素。
+	//	rcHeightPatch记录了一个指定范围的包围盒内的 每个cell column下nav mesh的高度(y值）该取多少
 	unsigned short* data;
 	int xmin, ymin, width, height;
 };
@@ -661,6 +663,8 @@ static bool buildPolyDetail(rcContext* ctx, const float* in, const int nin,
 	// Calculate minimum extents of the polygon based on input data.
 	float minExtent = polyMinExtent(verts, nverts);
 	
+	// 边 采样。
+	// 写入数据到 verts 数组
 	// Tessellate outlines.
 	// This is done in separate pass in order to ensure
 	// seamless height values across the ply boundaries.
@@ -773,7 +777,7 @@ static bool buildPolyDetail(rcContext* ctx, const float* in, const int nin,
 		triangulateHull(nverts, verts, nhull, hull, nin, tris);
 		return true;
 	}
-	
+	// 写入数据到 tris 数组。这个tris最终就是表示当前处理的这个多边形的三角形们
 	// Tessellate the base mesh.
 	// We're using the triangulateHull instead of delaunayHull as it tends to
 	// create a bit better triangulation for long thin triangles when there
@@ -786,7 +790,7 @@ static bool buildPolyDetail(rcContext* ctx, const float* in, const int nin,
 		ctx->log(RC_LOG_WARNING, "buildPolyDetail: Could not triangulate polygon (%d verts).", nverts);
 		return true;
 	}
-	
+	// 按面采样
 	if (sampleDist > 0)
 	{
 		// Create sample locations in a grid.
@@ -1019,7 +1023,7 @@ static void push3(rcIntArray& queue, int v1, int v2, int v3)
 	queue[queue.size() - 2] = v2;
 	queue[queue.size() - 1] = v3;
 }
-
+// bs: border size
 static void getHeightData(rcContext* ctx, const rcCompactHeightfield& chf,
 						  const unsigned short* poly, const int npoly,
 						  const unsigned short* verts, const int bs,
@@ -1049,6 +1053,9 @@ static void getHeightData(rcContext* ctx, const rcCompactHeightfield& chf,
 			{
 				int x = hp.xmin + hx + bs;
 				const rcCompactCell& c = chf.cells[x + y*chf.width];
+
+
+				// x、z平面的包围盒内的 cell column们
 				for (int i = (int)c.index, ni = (int)(c.index + c.count); i < ni; ++i)
 				{
 					const rcCompactSpan& s = chf.spans[i];
@@ -1058,6 +1065,7 @@ static void getHeightData(rcContext* ctx, const rcCompactHeightfield& chf,
 						hp.data[hx + hy*hp.width] = s.y;
 						empty = false;
 
+						// 如果当前处理的这个span  和当前这个poly是相同regeion,但这个span是边界span(与不同区域邻接)，加到 queue 中，以便后续进行bfs
 						// If any of the neighbours is not in same region,
 						// add the current location as flood fill start
 						bool border = false;
@@ -1123,7 +1131,7 @@ static void getHeightData(rcContext* ctx, const rcCompactHeightfield& chf,
 			
 			if ((unsigned int)hx >= (unsigned int)hp.width || (unsigned int)hy >= (unsigned int)hp.height)
 				continue;
-			
+			// KorganPuzzle 没看懂为什么还需要bfs来设置高度。前面已经在包围盒内遍历过每个cell column过了，如果前面没找到，那按理说这个cell column上没有符合区域要求的span，这里的rcGetCon也会判断发现与这个cell column没有邻接
 			if (hp.data[hx + hy*hp.width] != RC_UNSET_HEIGHT)
 				continue;
 			
@@ -1207,6 +1215,7 @@ bool rcBuildPolyMeshDetail(rcContext* ctx, const rcPolyMesh& mesh, const rcCompa
 		return false;
 	}
 	
+	// x、z平面的包围盒
 	// Find max size for a polygon area.
 	for (int i = 0; i < mesh.npolys; ++i)
 	{
@@ -1238,6 +1247,7 @@ bool rcBuildPolyMeshDetail(rcContext* ctx, const rcPolyMesh& mesh, const rcCompa
 		maxhh = rcMax(maxhh, ymax-ymin);
 	}
 	
+	// 处理每个poly时，复用这个hp
 	hp.data = (unsigned short*)rcAlloc(sizeof(unsigned short)*maxhw*maxhh, RC_ALLOC_TEMP);
 	if (!hp.data)
 	{
@@ -1277,6 +1287,7 @@ bool rcBuildPolyMeshDetail(rcContext* ctx, const rcPolyMesh& mesh, const rcCompa
 	{
 		const unsigned short* p = &mesh.polys[i*nvp*2];
 		
+		// 当前处理的这个poly的顶点个数
 		// Store polygon vertices for processing.
 		int npoly = 0;
 		for (int j = 0; j < nvp; ++j)
@@ -1294,7 +1305,7 @@ bool rcBuildPolyMeshDetail(rcContext* ctx, const rcPolyMesh& mesh, const rcCompa
 		hp.ymin = bounds[i*4+2];
 		hp.width = bounds[i*4+1]-bounds[i*4+0];
 		hp.height = bounds[i*4+3]-bounds[i*4+2];
-		getHeightData(ctx, chf, p, npoly, mesh.verts, borderSize, hp, arr, mesh.regs[i]);
+		getHeightData(ctx, chf, p, npoly, mesh.verts, borderSize, hp, arr, mesh.regs[i]); // 写入 hp.data
 		
 		// Build detail mesh.
 		int nverts = 0;
