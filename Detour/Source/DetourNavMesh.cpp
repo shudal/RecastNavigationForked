@@ -283,7 +283,7 @@ dtStatus dtNavMesh::init(unsigned char* data, const int dataSize, const int flag
 	dtStatus status = init(&params);
 	if (dtStatusFailed(status))
 		return status;
-
+	// 会构建当前这个tile和邻居们、offsemesh的连接信息之类的
 	return addTile(data, dataSize, flags, 0, 0);
 }
 
@@ -383,7 +383,7 @@ void dtNavMesh::unconnectLinks(dtMeshTile* tile, dtMeshTile* target)
 		}
 	}
 }
-
+// 遍历处理tile中的portal edge(连接到其他区域的边），这些边如果和target中的poly有连接，就构建一下
 void dtNavMesh::connectExtLinks(dtMeshTile* tile, dtMeshTile* target, int side)
 {
 	if (!tile) return;
@@ -450,7 +450,7 @@ void dtNavMesh::connectExtLinks(dtMeshTile* tile, dtMeshTile* target, int side)
 		}
 	}
 }
-
+// 处理 target里的 连接。认为连接的点是在tile内。构建tile、target的poly间的连接
 void dtNavMesh::connectExtOffMeshLinks(dtMeshTile* tile, dtMeshTile* target, int side)
 {
 	if (!tile) return;
@@ -476,7 +476,7 @@ void dtNavMesh::connectExtOffMeshLinks(dtMeshTile* tile, dtMeshTile* target, int
 		const float* p = &targetCon->pos[3];
 		float nearestPt[3];
 		dtPolyRef ref = findNearestPolyInTile(tile, p, halfExtents, nearestPt);
-		if (!ref)
+		if (!ref) // 找到里开始点最近的poly。这里对这个poly离这个点的距离是有限制的，根据y轴上的climb height、con中定义的端点半径 等参数来限制
 			continue;
 		// findNearestPoly may return too optimistic results, further check to make sure. 
 		if (dtSqr(nearestPt[0]-p[0])+dtSqr(nearestPt[2]-p[2]) > dtSqr(targetCon->rad))
@@ -520,6 +520,7 @@ void dtNavMesh::connectExtOffMeshLinks(dtMeshTile* tile, dtMeshTile* target, int
 	}
 
 }
+
 
 void dtNavMesh::connectIntLinks(dtMeshTile* tile)
 {
@@ -568,6 +569,7 @@ void dtNavMesh::baseOffMeshLinks(dtMeshTile* tile)
 	for (int i = 0; i < tile->header->offMeshConCount; ++i)
 	{
 		dtOffMeshConnection* con = &tile->offMeshCons[i];
+		// 认为 【con->pos的第一个顶点最近的poly】 和 【con->】
 		dtPoly* poly = &tile->polys[con->poly];
 	
 		const float halfExtents[3] = { con->rad, tile->header->walkableClimb, con->rad };
@@ -583,7 +585,7 @@ void dtNavMesh::baseOffMeshLinks(dtMeshTile* tile)
 		// Make sure the location is on current mesh.
 		float* v = &tile->verts[poly->verts[0]*3];
 		dtVcopy(v, nearestPt);
-
+		// 从con->poly连接到 离con第一个点最近的 poly
 		// Link off-mesh connection to target poly.
 		unsigned int idx = allocLink(tile);
 		if (idx != DT_NULL_LINK)
@@ -597,7 +599,7 @@ void dtNavMesh::baseOffMeshLinks(dtMeshTile* tile)
 			link->next = poly->firstLink;
 			poly->firstLink = idx;
 		}
-
+		// 连接到con->poly
 		// Start end-point is always connect back to off-mesh connection. 
 		unsigned int tidx = allocLink(tile);
 		if (tidx != DT_NULL_LINK)
@@ -1041,8 +1043,10 @@ dtStatus dtNavMesh::addTile(unsigned char* data, int dataSize, int flags,
 		nneis = getNeighbourTilesAt(header->x, header->y, i, neis, MAX_NEIS);
 		for (int j = 0; j < nneis; ++j)
 		{
+			// 处理的是poly本身记录的连接信息
 			connectExtLinks(tile, neis[j], i);
 			connectExtLinks(neis[j], tile, dtOppositeTile(i));
+			// 处理的是off mesh记录的连接信息
 			connectExtOffMeshLinks(tile, neis[j], i);
 			connectExtOffMeshLinks(neis[j], tile, dtOppositeTile(i));
 		}

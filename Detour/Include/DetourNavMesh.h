@@ -147,6 +147,7 @@ enum dtPolyTypes
 /// @ingroup detour
 struct dtPoly
 {
+	// 是 dtMeshTile::links中的下标。通过这个firstLink获取到当前dtPoly的第一个link，第一个link有指向下一个link 的指针，构成了一个链表
 	/// Index to first link in linked list. (Or #DT_NULL_LINK if there is no link.)
 	unsigned int firstLink;
 
@@ -196,7 +197,7 @@ struct dtLink
 {
 	dtPolyRef ref;					///< Neighbour reference. (The neighbor that is linked to.)
 	unsigned int next;				///< Index of the next link.
-	unsigned char edge;				///< Index of the polygon edge that owns this link.
+	unsigned char edge;				///< Index of the polygon edge that owns this link. // 边 开始的顶点的 在poly中的下标
 	unsigned char side;				///< If a boundary link, defines on which side the link is.
 	unsigned char bmin;				///< If a boundary link, defines the minimum sub-edge area.
 	unsigned char bmax;				///< If a boundary link, defines the maximum sub-edge area.
